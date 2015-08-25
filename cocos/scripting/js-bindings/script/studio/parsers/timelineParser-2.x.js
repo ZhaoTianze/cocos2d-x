@@ -41,7 +41,11 @@
         },
 
         getNodeJson: function(json){
-            return json["Content"]["Content"]["ObjectData"];
+            var content = json["Content"];
+            if(content["ObjectData"])
+                return content["ObjectData"];
+
+            return content["Content"]["ObjectData"];
         },
 
         getClass: function(json){
@@ -104,7 +108,9 @@
         var visible = getParam(json["VisibleForFrame"], true);
         node.setVisible(visible);
 
-        setContentSize(node, json["Size"]);
+        var size = json["Size"];
+        if(size)
+            setContentSize(node, size);
 
         if (json["Alpha"] != null)
             node.setOpacity(json["Alpha"]);
@@ -118,9 +124,7 @@
             extensionData.setCustomProperty(customProperty);
         extensionData.setActionTag(actionTag);
         if (node.getComponent("ComExtensionData"))
-        {
             node.removeComponent("ComExtensionData");
-        }
         node.addComponent(extensionData);
 
         node.setCascadeColorEnabled(true);
@@ -294,9 +298,7 @@
             extensionData.setCustomProperty(customProperty);
         extensionData.setActionTag(actionTag);
         if (widget.getComponent("ComExtensionData"))
-        {
             widget.removeComponent("ComExtensionData");
-        }
         widget.addComponent(extensionData);
 
         var rotationSkewX = json["RotationSkewX"];
@@ -1521,10 +1523,12 @@
         if(json["FileData"] && json["FileData"]["Path"])
             resFile = resourcePath + json["FileData"]["Path"];
 
-        var node;
-        if(resFile)
-            node = jsb.Sprite3D.create(resFile);
-        else
+        var node = null;
+        if(resFile) {
+            if(jsb.fileUtils.isFileExist(resFile))
+                node = jsb.Sprite3D.create(resFile);
+        }
+        if(null === node)
             node = jsb.Sprite3D.create();
 
         if(node) {
@@ -1563,9 +1567,12 @@
         if(json["FileData"] && json["FileData"]["Path"])
             resFile = resourcePath+json["FileData"]["Path"];
 
-        if(resFile)
-            node = jsb.PUParticleSystem3D.create(resFile);
-        else
+        if(resFile){
+            if(jsb.fileUtils.isFileExist(resFile))
+                node = jsb.PUParticleSystem3D.create(resFile);
+        }
+
+        if(null === node)
             node = jsb.PUParticleSystem3D.create();
 
         if(node){
