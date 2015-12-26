@@ -37,6 +37,7 @@ THE SOFTWARE.
 #include "base/ccUtils.h"
 #include "base/ccUTF8.h"
 #include "2d/CCCamera.h"
+#include "deprecated/CCString.h"
 
 NS_CC_BEGIN
 
@@ -263,7 +264,7 @@ static keyCodeItem g_keyCodeStructArray[] = {
 //////////////////////////////////////////////////////////////////////////
 
 
-GLViewImpl::GLViewImpl()
+GLViewImpl::GLViewImpl(bool initglfw)
 : _captured(false)
 , _supportTouch(false)
 , _isInRetinaMonitor(false)
@@ -283,9 +284,11 @@ GLViewImpl::GLViewImpl()
     }
 
     GLFWEventHandler::setGLViewImpl(this);
-
-    glfwSetErrorCallback(GLFWEventHandler::onGLFWError);
-    glfwInit();
+    if (initglfw)
+    {
+        glfwSetErrorCallback(GLFWEventHandler::onGLFWError);
+        glfwInit();
+    }
 }
 
 GLViewImpl::~GLViewImpl()
@@ -302,7 +305,7 @@ GLViewImpl* GLViewImpl::create(const std::string& viewName)
         ret->autorelease();
         return ret;
     }
-
+    CC_SAFE_DELETE(ret);
     return nullptr;
 }
 
@@ -313,7 +316,7 @@ GLViewImpl* GLViewImpl::createWithRect(const std::string& viewName, Rect rect, f
         ret->autorelease();
         return ret;
     }
-
+    CC_SAFE_DELETE(ret);
     return nullptr;
 }
 
@@ -324,7 +327,7 @@ GLViewImpl* GLViewImpl::createWithFullScreen(const std::string& viewName)
         ret->autorelease();
         return ret;
     }
-
+    CC_SAFE_DELETE(ret);
     return nullptr;
 }
 
@@ -335,7 +338,7 @@ GLViewImpl* GLViewImpl::createWithFullScreen(const std::string& viewName, const 
         ret->autorelease();
         return ret;
     }
-    
+    CC_SAFE_DELETE(ret);
     return nullptr;
 }
 
@@ -357,6 +360,19 @@ bool GLViewImpl::initWithRect(const std::string& viewName, Rect rect, float fram
     int neeHeight = rect.size.height * _frameZoomFactor;
 
     _mainWindow = glfwCreateWindow(needWidth, neeHeight, _viewName.c_str(), _monitor, nullptr);
+
+    if (_mainWindow == nullptr)
+    {
+        std::string message = "Can't create window";
+        if (!_glfwError.empty())
+        {
+            message.append("\nMore info: \n");
+            message.append(_glfwError);
+        }
+
+        MessageBox(message.c_str(), "Error launch application");
+        return false;
+    }
 
     /*
     *  Note that the created window and context may differ from what you requested,
@@ -432,7 +448,7 @@ bool GLViewImpl::initWithFullscreen(const std::string &viewname, const GLFWvidmo
     if (nullptr == _monitor)
         return false;
     
-    //These are soft contraints. If the video mode is retrieved at runtime, the resulting window and context should match these exactly. If invalid attribs are passed (eg. from an outdated cache), window creation will NOT fail but the actual window/context may differ.
+    //These are soft constraints. If the video mode is retrieved at runtime, the resulting window and context should match these exactly. If invalid attribs are passed (eg. from an outdated cache), window creation will NOT fail but the actual window/context may differ.
     glfwWindowHint(GLFW_REFRESH_RATE, videoMode.refreshRate);
     glfwWindowHint(GLFW_RED_BITS, videoMode.redBits);
     glfwWindowHint(GLFW_BLUE_BITS, videoMode.blueBits);
@@ -600,7 +616,8 @@ Rect GLViewImpl::getScissorRect() const
 
 void GLViewImpl::onGLFWError(int errorID, const char* errorDesc)
 {
-    CCLOGERROR("GLFWError #%d Happen, %s\n", errorID, errorDesc);
+    _glfwError = StringUtils::format("GLFWError #%d Happen, %s", errorID, errorDesc);
+    CCLOGERROR("%s", _glfwError.c_str());
 }
 
 void GLViewImpl::onGLFWMouseCallBack(GLFWwindow* window, int button, int action, int modify)

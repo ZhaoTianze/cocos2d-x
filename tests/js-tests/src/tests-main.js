@@ -62,6 +62,9 @@ var TestScene = cc.Scene.extend({
         }
     },
     onMainMenuCallback:function () {
+        if (director.isPaused()) {
+            director.resume();
+        } 
         var scene = new cc.Scene();
         var layer = new TestController();
         scene.addChild(layer);
@@ -135,7 +138,7 @@ var TestController = cc.LayerGradient.extend({
 
             // enable disable
             if ( !cc.sys.isNative) {
-                if( 'opengl' in cc.sys.capabilities ){
+                if( cc._renderType !== cc.game.RENDER_TYPE_CANVAS ){
                     menuItem.enabled = (testNames[i].platforms & PLATFORM_HTML5) | (testNames[i].platforms & PLATFORM_HTML5_WEBGL);
                 }else{
                     menuItem.setEnabled( testNames[i].platforms & PLATFORM_HTML5 );
@@ -318,6 +321,14 @@ var testNames = [
         }
     },
     {
+        title:"Component Test",
+        platforms: PLATFORM_JSB,
+        linksrc:"src/ComponentTest/ComponentTest.js",
+        testScene:function () {
+            return new ComponentTestScene();
+        }
+    },
+    {
         title:"CurrentLanguage Test",
         platforms: PLATFORM_ALL,
         linksrc:"src/CurrentLanguageTest/CurrentLanguageTest.js",
@@ -469,6 +480,15 @@ var testNames = [
         }
     },
     {
+        title:"Memory Model Test",
+        resource:g_menu,
+        platforms: PLATFORM_JSB,
+        linksrc:"src/MemoryModelTest/MemoryModelTest.js",
+        testScene:function () {
+            return new MemoryModelTestScene();
+        }
+    },
+    {
         title:"Menu Test",
         resource:g_menu,
         platforms: PLATFORM_ALL,
@@ -533,15 +553,6 @@ var testNames = [
         linksrc:"src/PathTest/PathTest.js",
         testScene:function () {
             return new PathTestScene();
-        }
-    },
-    {
-        title:"Performance Test",
-        platforms: PLATFORM_ALL,
-        linksrc:"",
-        resource:g_performace,
-        testScene:function () {
-            return new PerformanceTestScene();
         }
     },
     {
