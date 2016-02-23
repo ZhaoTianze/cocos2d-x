@@ -1595,14 +1595,7 @@ cc.Director.EVENT_BEFORE_UPDATE = "director_before_update";
 cc.Director.EVENT_AFTER_UPDATE = "director_after_update";
 cc.Director.EVENT_BEFORE_SCENE_LAUNCH = "director_before_scene_launch";
 
-cc.Director.prototype.runScene = function(scene){
-    if (!this.getRunningScene()) {
-        this.runWithScene(scene);
-    }
-    else {
-        this.replaceScene(scene);
-    }
-};
+cc.Director.prototype.runScene = cc.Director.prototype.replaceScene;
 
 cc.visibleRect = {
     topLeft:cc.p(0,0),
@@ -2654,6 +2647,17 @@ cc.LabelTTF.prototype.setDrawMode = function () {};
 
 
 //
+// Label overflow
+//
+cc.Label.Overflow = {
+    NONE: 0,
+    CLAMP: 1,
+    SHRINK: 2,
+    RESIZE_HEIGHT: 3
+};
+
+
+//
 // Label adaptation to LabelTTF/LabelBMFont/LabelAtlas
 //
 _p = cc.Label.prototype;
@@ -2782,6 +2786,16 @@ cc.GLProgram.prototype.setUniformLocationWithMatrix4fv = function(){
     var tempArray = Array.prototype.slice.call(arguments);
     tempArray = Array.prototype.concat.call(tempArray, 4);
     this.setUniformLocationWithMatrixfvUnion.apply(this, tempArray);
+};
+
+var jsbSetUniformCallback = cc.GLProgramState.prototype.setUniformCallback;
+cc.GLProgramState.prototype.setUniformCallback = function (uniform, callback) {
+    if (!jsb._root) {
+        jsb._root = {};
+    }
+    var owner = jsb._root;
+    jsb.addRoot(owner, callback);
+    jsbSetUniformCallback.call(this, uniform, callback);
 };
 
 
