@@ -4,6 +4,7 @@
 #include "renderer/CCCustomCommand.h"
 #include "VisibleRect.h"
 #include "editor-support/cocostudio/CCComExtensionData.h"
+#include "ui/CocosGUI.h"
 
 
 USING_NS_CC;
@@ -23,6 +24,8 @@ CocoStudioActionTimelineTests::CocoStudioActionTimelineTests()
     ADD_TEST_CASE(TestActionTimelineEase);
     ADD_TEST_CASE(TestActionTimelineSkeleton);
     ADD_TEST_CASE(TestTimelineExtensionData);
+    ADD_TEST_CASE(TestActionTimelineBlendFuncFrame);
+    ADD_TEST_CASE(TestAnimationClipEndCallBack);
 }
 
 CocoStudioActionTimelineTests::~CocoStudioActionTimelineTests()
@@ -45,7 +48,7 @@ bool ActionTimelineBaseTest::init()
 
         addChild(bg);
 
-        setGLProgram(ShaderCache::getInstance()->getGLProgram(GLProgram::SHADER_NAME_POSITION_TEXTURE_COLOR));
+        setGLProgram(GLProgramCache::getInstance()->getGLProgram(GLProgram::SHADER_NAME_POSITION_TEXTURE_COLOR));
 
         return true;
     }
@@ -69,11 +72,11 @@ void TestActionTimeline::onEnter()
 {
     ActionTimelineBaseTest::onEnter();
 
-    Node* node = CSLoader::createNode("ActionTimeline/DemoPlayer.csb");
-    ActionTimeline* action = CSLoader::createTimeline("ActionTimeline/DemoPlayer.csb");
+    Data data = FileUtils::getInstance()->getDataFromFile("ActionTimeline/DemoPlayer.csb");
+    Node* node = CSLoader::createNode(data);
+    ActionTimeline* action = CSLoader::createTimeline(data, "ActionTimeline/DemoPlayer.csb");
     node->runAction(action);
     action->gotoFrameAndPlay(0);
-//    ActionTimelineNode* node = CSLoader::createActionTimelineNode("ActionTimeline/DemoPlayer.csb", 0, 40, true);
 
     node->setScale(0.2f);
     node->setPosition(VisibleRect::center());
@@ -343,7 +346,8 @@ void TestActionTimelineSkeleton::onEnter()
     boneDrawsBtn->setPosition(Vec2(VisibleRect::right().x - 30, VisibleRect::top().y - 30));
     boneDrawsBtn->setTitleText("Draw bone");
 
-    boneDrawsBtn->addClickEventListener([skeletonNode](Ref* sender)
+    skeletonNode->setDebugDrawEnabled(true);
+    boneDrawsBtn->addClickEventListener([skeletonNode, this](Ref* sender)
     {
         skeletonNode->setDebugDrawEnabled(!skeletonNode->isDebugDrawEnabled());
     });
@@ -402,9 +406,6 @@ void TestActionTimelineSkeleton::onEnter()
               debugDrawNode->drawRect(leftbottom, righttop, cocos2d::Color4F::YELLOW);
 
             // bone boundingbox
-           /*  // debug draw contentsize
-           rect = cocos2d::Rect(Vec2(.0f, .0f), weaponHandeBone->getContentSize());
-              rect = RectApplyAffineTransform(rect, weaponHandeBone->getNodeToParentAffineTransform());*/
             rect = weaponHandeBone->getBoundingBox();
             leftbottom.x = rect.getMinX(); leftbottom.y = rect.getMinY();
             righttop.x = rect.getMaxX(); righttop.y = rect.getMaxY();
@@ -477,13 +478,79 @@ void TestActionTimelineSkeleton::onEnter()
             _changedDisplays = false;
         }
     });
+
+
+    /*********** test cases for bugs        **********/
+    // bug: #13060 https://github.com/cocos2d/cocos2d-x/issues/13060
+    // bug: bone draw at the other edge when move to outside right edge.
+    BoneNode* bugtestBoneNode = BoneNode::create(500);
+    bugtestBoneNode->setRotation(-10);
+    bugtestBoneNode->retain();
+    bugtestBoneNode->setDebugDrawEnabled(true);
+    bugtestBoneNode->setPosition(Vec2(1500, VisibleRect::top().y - 90));
+    auto bug13060Btn = cocos2d::ui::Button::create();
+    bug13060Btn->setPosition(Vec2(VisibleRect::right().x - 30, VisibleRect::top().y - 90));
+    bug13060Btn->setTitleText("bug #13060");
+    addChild(bug13060Btn);
+    bug13060Btn->addClickEventListener([bugtestBoneNode, skeletonNode](Ref* sender)
+    {
+        if (bugtestBoneNode->getParent() == nullptr)
+            skeletonNode->addChild(bugtestBoneNode);
+        else
+            bugtestBoneNode->removeFromParent();
+         // bug fixed while bugtestBoneNode not be drawn at the bottom edge 
+    });
+
+    // bug: #13005 https://github.com/cocos2d/cocos2d-x/issues/#13005
+    // bug: BoneNode 's debugdraw can not be controlled by ancestor's visible
+    auto leftleg = skeletonNode->getBoneNode("Layer26");
+    auto bug13005Btn = cocos2d::ui::Button::create();
+    addChild(bug13005Btn);
+    bug13005Btn->setPosition(Vec2(VisibleRect::right().x - 30, VisibleRect::top().y - 105));
+    bug13005Btn->setTitleText("bug #13005");
+    bug13005Btn->addClickEventListener([leftleg](Ref* sender)
+    {
+        leftleg->setVisible(!leftleg->isVisible());
+        // bug fixed while leftleg's child hide with leftleg's visible
+    });
+
+
+    /*************    Skeleton nest Skeleton test       *************/
+    auto nestSkeletonBtn = cocos2d::ui::Button::create();
+    nestSkeletonBtn->setTitleText("Skeleton Nest");
+    nestSkeletonBtn->setPosition(Vec2(VisibleRect::right().x - 40, VisibleRect::top().y - 120));
+    addChild(nestSkeletonBtn);
+    auto nestSkeleton = static_cast<SkeletonNode*>(CSLoader::createNode("ActionTimeline/DemoPlayer_skeleton.csb"));
+    nestSkeleton->retain();
+    ActionTimeline* nestSkeletonAction = action->clone();
+    nestSkeletonAction->retain();
+    nestSkeleton->runAction(nestSkeletonAction);
+    nestSkeleton->setScale(0.2f);
+    nestSkeleton->setPosition(150, 300);
+    nestSkeletonAction->gotoFrameAndPlay(0);
+    // show debug draws, or comment this for hide bones draws
+    for (auto& nestbonechild : nestSkeleton->getAllSubBonesMap())
+    {
+        nestbonechild.second->setDebugDrawEnabled(true);
+    }
+
+    nestSkeletonBtn->addClickEventListener([leftleg, nestSkeleton, nestSkeletonAction](Ref* sender)
+    {
+        if (nestSkeleton->getParent() == nullptr)
+        {
+            leftleg->addChild(nestSkeleton);
+        }
+        else
+        {
+            nestSkeleton->removeFromParentAndCleanup(false);
+        }
+    });
 }
 
 std::string TestActionTimelineSkeleton::title() const
 {
     return "Test ActionTimeline Skeleton";
 }
-
 
 // TestTimelineExtensionData
 void TestTimelineExtensionData::onEnter()
@@ -513,4 +580,100 @@ void TestTimelineExtensionData::onEnter()
 std::string TestTimelineExtensionData::title() const
 {
     return "Test Timeline extension data";
+}
+
+// TestActionTimelineBlendFuncFrame
+void TestActionTimelineBlendFuncFrame::onEnter()
+{
+    ActionTimelineBaseTest::onEnter();
+    Node* node = CSLoader::createNode("ActionTimeline/skeletonBlendFuncFrame.csb");
+    ActionTimeline* action = CSLoader::createTimeline("ActionTimeline/skeletonBlendFuncFrame.csb");
+    node->runAction(action);
+    node->setScale(0.2f);
+    node->setPosition(VisibleRect::center());
+    this->addChild(node);
+    action->gotoFrameAndPlay(0);
+}
+
+std::string TestActionTimelineBlendFuncFrame::title() const
+{
+    return "Test ActionTimeline BlendFunc Frame";
+}
+
+//TestAnimationClipEndCallBack
+void TestAnimationClipEndCallBack::onEnter()
+{
+    ActionTimelineBaseTest::onEnter();
+    Node* node = CSLoader::createNode("ActionTimeline/DemoPlayer_skeleton.csb");
+    ActionTimeline* action = CSLoader::createTimeline("ActionTimeline/DemoPlayer_skeleton.csb");
+    node->runAction(action);
+    node->setScale(0.2f);
+    node->setPosition(150, 150);
+
+     // test for frame end call back
+     action->addFrameEndCallFunc(5, "CallBackAfterFifthFrame", [this]{
+          auto text = ui::Text::create();
+          text->setString("CallBackAfterFifthFrame");
+          text->setPosition(Vec2(100, 40));
+          text->setLocalZOrder(1000);
+          this->runAction(Sequence::create(
+              CallFunc::create([this, text]{this->addChild(text); }),
+              DelayTime::create(3),
+              CallFunc::create([text]{text->removeFromParent(); }),
+              nullptr));
+     });
+     action->addFrameEndCallFunc(5, "AnotherCallBackAfterFifthFrame", [this]{
+         auto text = ui::Text::create();
+         text->setString("AnotherCallBackAfterFifthFrame");
+         text->setPosition(Vec2(100, 70));
+         this->runAction(Sequence::create(
+             CallFunc::create([this, text]{this->addChild(text); }),
+             DelayTime::create(3),
+             CallFunc::create([text]{text->removeFromParent(); }),
+             nullptr));
+     });
+     action->addFrameEndCallFunc(7, "CallBackAfterSenvnthFrame", [this]{
+         auto text = ui::Text::create();
+         text->setString("CallBackAfterSenvnthFrame");
+         text->setPosition(Vec2(100, 100));
+         this->runAction(Sequence::create(
+             CallFunc::create([this, text]{this->addChild(text); }),
+             DelayTime::create(3),
+             CallFunc::create([text]{text->removeFromParent(); }),
+             nullptr));
+     });
+     
+     // test for animation clip end call back
+     action->setAnimationEndCallFunc("stand", [this]{
+         auto text = ui::Text::create();
+         text->setString("CallBackAfterStandAnimationClip");
+         text->setPosition(Vec2(100, 130));
+         this->runAction(Sequence::create(
+             CallFunc::create([this, text]{this->addChild(text); }),
+             DelayTime::create(3),
+             CallFunc::create([text]{text->removeFromParent(); }),
+             nullptr));
+     });
+ 
+     AnimationClip animClip("testClip", 3, 13);
+     animClip.clipEndCallBack = ([this,node]{
+         auto text = ui::Text::create();
+         text->setString("testClip");
+         text->setPosition(Vec2(100, 140));
+         this->runAction(Sequence::create(
+             CallFunc::create([this, text]{this->addChild(text); }),
+             DelayTime::create(3),
+             CallFunc::create([text]{text->removeFromParent(); }),
+             nullptr));
+     });
+     action->addAnimationInfo(animClip);
+
+    action->setTimeSpeed(0.2f);
+    addChild(node);
+    action->gotoFrameAndPlay(0);
+}
+
+std::string TestAnimationClipEndCallBack::title() const
+{
+    return "Test ActionTimeline Frame End Call Back\n and Animation Clip End Call Back";
 }
